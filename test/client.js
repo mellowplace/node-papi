@@ -6,6 +6,7 @@
  * Module dependencies.
  */
 
+var bluebird = require('bluebird');
 var debug = require('debug')('papi');
 var events = require('events');
 var http = require('http');
@@ -1805,6 +1806,70 @@ describe('Client', function() {
         should.exist(err);
 
         err.message.should.containEql('Nock: No match for request');
+
+        done();
+      });
+    });
+  });
+
+  describe('Promise', function() {
+    before(function() {
+      nock.disableNetConnect();
+    });
+
+    after(function() {
+      nock.enableNetConnect();
+    });
+
+    beforeEach(function() {
+      this.baseUrl = 'http://example.org';
+
+      this.client = papi.Client({
+        baseUrl: this.baseUrl,
+        promise: bluebird,
+      });
+      this.client.on('log', debug);
+
+      this.nock = nock(this.baseUrl);
+    });
+
+    it('should work', function(done) {
+      this.nock
+        .post('/post')
+        .reply(200, { hello: 'world' });
+
+      var opts = {
+        path: '/post',
+        method: 'POST',
+      };
+
+      this.client._request(opts).then(function(value) {
+        value.body.should.eql({ hello: 'world' });
+
+        done();
+      }).catch(done);
+    });
+
+    it('should work with shortcuts', function(done) {
+      this.nock
+        .get('/get')
+        .reply(200, { hello: 'world' });
+
+      this.client._get('/get').then(function(value) {
+        value.body.should.eql({ hello: 'world' });
+        done();
+      }).catch(done);
+    });
+
+    it('should handle errors', function(done) {
+      this.nock
+        .get('/get')
+        .reply(500);
+
+      this.client._get('/get').then(function() {
+        done(new Error('should not call then'));
+      }).catch(function(err) {
+        should(err).have.property('message', 'internal server error');
 
         done();
       });
